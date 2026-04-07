@@ -94,6 +94,10 @@ export class PlayScene extends Phaser.Scene {
 
     this.score = 0;
 
+    // Lives system
+    this.livesRemaining = parseInt(localStorage.getItem('flappy-lives') || String(CONFIG.livesTotal), 10);
+    this._createLifeBirds();
+
     // Bob timer for READY state
     this.bobTime = 0;
 
@@ -112,13 +116,110 @@ export class PlayScene extends Phaser.Scene {
     this.spaceKey.on('down', () => this.handleInput());
   }
 
+  _createLifeBirds() {
+    this._lifeBirds = [];
+    const activeIndex = CONFIG.livesTotal - this.livesRemaining;
+
+    for (let i = 0; i < CONFIG.livesTotal; i++) {
+      const x = CONFIG.lifeBirdStartX + i * CONFIG.lifeBirdSpacingX;
+      const y = CONFIG.lifeBirdY;
+
+      if (i < activeIndex) {
+        // Already lost — hidden
+        this._lifeBirds.push(null);
+        continue;
+      }
+
+      const sprite = this.add.sprite(x, y, 'bird', 1);
+      sprite.setScale(CONFIG.lifeBirdScale);
+      sprite.setDepth(20);
+
+      if (i === activeIndex) {
+        // Active life — celebrating bird
+        sprite.play('flap');
+        this._addCelebrationTween(sprite);
+      }
+      // Future lives: static, frame 1 (already set)
+
+      this._lifeBirds.push(sprite);
+    }
+  }
+
+  _addCelebrationTween(sprite) {
+    // Vertical bobbing
+    this.tweens.add({
+      targets: sprite,
+      y: sprite.y - 4,
+      duration: 300,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
+
+    // Rotation wobble
+    this.tweens.add({
+      targets: sprite,
+      angle: { from: -10, to: 10 },
+      duration: 200,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
+
+    // Scale pulse
+    this.tweens.add({
+      targets: sprite,
+      scale: CONFIG.lifeBirdScale + 0.1,
+      duration: 400,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
+  }
+
+  _explodeLifeBird(sprite) {
+    // Kill celebration tweens
+    this.tweens.killTweensOf(sprite);
+
+    // Mini feather explosion at HUD bird position
+    const bx = sprite.x;
+    const by = sprite.y;
+    for (let i = 0; i < 3; i++) {
+      const emitter = this.add.particles(bx, by, `feather-${i}`, {
+        speed: { min: 40, max: 120 },
+        angle: { min: 0, max: 360 },
+        alpha: { start: 1, end: 0 },
+        scale: { start: 0.5, end: 0.1 },
+        lifespan: { min: 400, max: 800 },
+        gravityY: 150,
+        quantity: 2,
+        emitting: false,
+      });
+      emitter.setDepth(21);
+      emitter.explode();
+    }
+
+    sprite.setVisible(false);
+  }
+
   handleInput() {
     if (this.state === State.READY) {
       this.startPlaying();
     } else if (this.state === State.PLAYING) {
       this.flap();
     } else if (this.state === State.GAME_OVER) {
-      // Quiz handles restart — do nothing
+      if (this.canRestart) {
+        this.canRestart = false;
+        // Destroy score modal, show quiz modal
+        for (const obj of this._modalObjects) obj.destroy();
+        this._modalObjects = [];
+        const cx = CONFIG.gameWidth / 2;
+        const cy = CONFIG.gameHeight / 2 - 20;
+        createMathQuiz(this, cx, cy, () => {
+          localStorage.setItem('flappy-lives', String(CONFIG.livesTotal));
+          this.scene.restart();
+        });
+      }
     }
   }
 
@@ -184,51 +285,83 @@ export class PlayScene extends Phaser.Scene {
       if (trigger.body) trigger.body.setVelocityX(0);
     });
 
+    // Explode the active HUD bird
+    const activeIndex = CONFIG.livesTotal - this.livesRemaining;
+    const activeLifeBird = this._lifeBirds[activeIndex];
+    if (activeLifeBird) {
+      this._explodeLifeBird(activeLifeBird);
+    }
+
+    // Decrement lives
+    this.livesRemaining--;
+    localStorage.setItem('flappy-lives', String(this.livesRemaining));
+
+    if (this.livesRemaining > 0) {
+      // Still have lives — restart after 1s, no quiz
+      this.time.delayedCall(1000, () => {
+        this.scene.restart();
+      });
+    } else {
+      // No lives left — show game over modal → quiz
+      this._showGameOverModal();
+    }
+  }
+
+  _showGameOverModal() {
     // Update high score
     const prevBest = parseInt(localStorage.getItem('flappy-highscore') || '0', 10);
     const isNewBest = this.score > prevBest;
     const highScore = isNewBest ? this.score : prevBest;
     if (isNewBest) localStorage.setItem('flappy-highscore', String(this.score));
 
-    // Game Over modal (after feathers settle)
+    // High-score modal (after feathers settle)
+    this.canRestart = false;
+    this._modalObjects = [];
     this.time.delayedCall(800, () => {
       const cx = CONFIG.gameWidth / 2;
       const cy = CONFIG.gameHeight / 2 - 20;
       const mw = 220;
-      const mh = 340;
+      const mh = 200;
+      const m = this._modalObjects;
 
       // Modal background
-      this.add.rectangle(cx, cy + 30, mw, mh, 0x000000, 0.8)
-        .setOrigin(0.5).setDepth(25).setStrokeStyle(2, 0xffffff);
+      m.push(this.add.rectangle(cx, cy, mw, mh, 0x000000, 0.8)
+        .setOrigin(0.5).setDepth(25).setStrokeStyle(2, 0xffffff));
 
       // "Game Over" title
-      this.add.text(cx, cy - 130, 'Game Over', {
+      m.push(this.add.text(cx, cy - 75, 'Game Over', {
         fontSize: '28px', fontFamily: 'Arial, sans-serif', fontStyle: 'bold',
         color: '#ffffff', stroke: '#333333', strokeThickness: 4,
-      }).setOrigin(0.5).setDepth(26);
+      }).setOrigin(0.5).setDepth(26));
 
       // Score
-      this.add.text(cx, cy - 85, `Score: ${this.score}`, {
+      m.push(this.add.text(cx, cy - 30, `Score: ${this.score}`, {
         fontSize: '22px', fontFamily: 'Arial, sans-serif', fontStyle: 'bold',
         color: '#ffffff', stroke: '#333333', strokeThickness: 3,
-      }).setOrigin(0.5).setDepth(26);
+      }).setOrigin(0.5).setDepth(26));
 
       // High score
-      this.add.text(cx, cy - 50, `Best: ${highScore}`, {
+      m.push(this.add.text(cx, cy + 10, `Best: ${highScore}`, {
         fontSize: '22px', fontFamily: 'Arial, sans-serif', fontStyle: 'bold',
         color: isNewBest ? '#f7dc6f' : '#aaaaaa', stroke: '#333333', strokeThickness: 3,
-      }).setOrigin(0.5).setDepth(26);
+      }).setOrigin(0.5).setDepth(26));
 
       // New best indicator
       if (isNewBest && this.score > 0) {
-        this.add.text(cx, cy - 20, 'NEW BEST!', {
+        m.push(this.add.text(cx, cy + 45, 'NEW BEST!', {
           fontSize: '16px', fontFamily: 'Arial, sans-serif', fontStyle: 'bold',
           color: '#f7dc6f', stroke: '#333333', strokeThickness: 2,
-        }).setOrigin(0.5).setDepth(26);
+        }).setOrigin(0.5).setDepth(26));
       }
 
+      // "Tap to continue" after 500ms delay
       this.time.delayedCall(500, () => {
-        createMathQuiz(this, cx, cy, () => this.scene.restart());
+        const tapPrompt = this.add.text(cx, cy + 75, 'Tap to continue', {
+          fontSize: '16px', fontFamily: 'Arial, sans-serif',
+          color: '#aaaaaa', stroke: '#333333', strokeThickness: 2,
+        }).setOrigin(0.5).setDepth(26);
+        m.push(tapPrompt);
+        this.canRestart = true;
       });
     });
   }

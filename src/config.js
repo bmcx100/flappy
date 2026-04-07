@@ -13,4 +13,9 @@ export const CONFIG = {
   pipeBodyWidth: 60,
   birdWidth: 34,
   birdHeight: 24,
+  livesTotal: 3,
+  lifeBirdScale: 0.7,
+  lifeBirdY: 25,
+  lifeBirdStartX: 25,
+  lifeBirdSpacingX: 22,
 };
