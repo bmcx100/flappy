@@ -68,6 +68,40 @@ function drawBirdFrame(ctx, ox, fw, fh, wingPhase) {
   ctx.stroke();
 }
 
+/** Generate 5 small feather textures for death explosion */
+export function createFeatherTextures(scene) {
+  const colors = ['#f7dc6f', '#f0c040', '#ffffff', '#e74c3c', '#d4ac0d'];
+  const fw = 6;
+  const fh = 10;
+
+  colors.forEach((color, i) => {
+    const key = `feather-${i}`;
+    const g = scene.textures.createCanvas(key, fw, fh);
+    const ctx = g.context;
+
+    ctx.clearRect(0, 0, fw, fh);
+
+    // Leaf/teardrop shape
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(fw / 2, 0);
+    ctx.quadraticCurveTo(fw + 1, fh * 0.3, fw / 2, fh);
+    ctx.quadraticCurveTo(-1, fh * 0.3, fw / 2, 0);
+    ctx.closePath();
+    ctx.fill();
+
+    // Faint center vein line
+    ctx.strokeStyle = 'rgba(0,0,0,0.2)';
+    ctx.lineWidth = 0.5;
+    ctx.beginPath();
+    ctx.moveTo(fw / 2, 1);
+    ctx.lineTo(fw / 2, fh - 1);
+    ctx.stroke();
+
+    g.refresh();
+  });
+}
+
 function roundRect(ctx, x, y, w, h, r) {
   ctx.beginPath();
   ctx.moveTo(x + r, y);

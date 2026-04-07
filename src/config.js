@@ -8,9 +8,9 @@ export const CONFIG = {
   pipeInterval: 1500,
   birdX: 90,
   groundHeight: 78,
-  pipeCapWidth: 48,
-  pipeCapHeight: 18,
-  pipeBodyWidth: 40,
+  pipeCapWidth: 70,
+  pipeCapHeight: 22,
+  pipeBodyWidth: 60,
   birdWidth: 34,
   birdHeight: 24,
 };

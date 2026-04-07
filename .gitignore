@@ -1,2 +1,6 @@
 node_modules/
 .superpowers/
+.claude/
+.codex/
+.playwright-mcp/
+*.png

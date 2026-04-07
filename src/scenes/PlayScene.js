@@ -1,4 +1,7 @@
 import { CONFIG } from '../config.js';
+import { initAudio, playFlap, playScore, playHit, playDeathSplat, startMusic, stopMusic } from '../assets/audio.js';
+import { createSettingsUI } from '../ui/settingsButton.js';
+import { createMathQuiz } from '../ui/mathQuiz.js';
 
 const State = { READY: 0, PLAYING: 1, GAME_OVER: 2 };
 
@@ -90,13 +93,21 @@ export class PlayScene extends Phaser.Scene {
     ).setOrigin(0.5).setDepth(20).setVisible(false);
 
     this.score = 0;
-    this.canRestart = false;
 
     // Bob timer for READY state
     this.bobTime = 0;
 
-    // Input
-    this.input.on('pointerdown', () => this.handleInput());
+    // Settings UI (must be created before scene-level input so it can stopPropagation)
+    this.settingsUI = createSettingsUI(this, () => this.state === State.PLAYING);
+
+    // Input — skip if settings UI consumed this event
+    this.input.on('pointerdown', () => {
+      if (this._settingsInputConsumed) {
+        this._settingsInputConsumed = false;
+        return;
+      }
+      this.handleInput();
+    });
     this.spaceKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
     this.spaceKey.on('down', () => this.handleInput());
   }
@@ -107,7 +118,7 @@ export class PlayScene extends Phaser.Scene {
     } else if (this.state === State.PLAYING) {
       this.flap();
     } else if (this.state === State.GAME_OVER) {
-      this.restartGame();
+      // Quiz handles restart — do nothing
     }
   }
 
@@ -117,26 +128,48 @@ export class PlayScene extends Phaser.Scene {
     this.tapText.setVisible(false);
     this.scoreText.setVisible(true);
     this.bird.body.setAllowGravity(true);
+    initAudio();
+    startMusic();
     this.flap();
     this.startPipeTimer();
   }
 
   flap() {
     this.bird.body.setVelocityY(CONFIG.flapVelocity);
-  }
-
-  restartGame() {
-    if (!this.canRestart) return;
-    this.scene.restart();
+    playFlap();
   }
 
   die() {
     if (this.state === State.GAME_OVER) return;
     this.state = State.GAME_OVER;
 
-    // Bird tumbles
+    stopMusic();
+    playHit();
+    playDeathSplat();
+
+    // Feather explosion at bird position
+    const bx = this.bird.x;
+    const by = this.bird.y;
+    for (let i = 0; i < 5; i++) {
+      const emitter = this.add.particles(bx, by, `feather-${i}`, {
+        speed: { min: 80, max: 250 },
+        angle: { min: 0, max: 360 },
+        alpha: { start: 1, end: 0 },
+        scale: { start: 1, end: 0.3 },
+        lifespan: { min: 800, max: 1500 },
+        gravityY: 300,
+        quantity: i < 3 ? 4 : 3, // 4+4+4+3+3 = 18 total
+        emitting: false,
+      });
+      emitter.setDepth(15);
+      emitter.explode();
+    }
+
+    // Hide bird, stop physics
+    this.bird.setVisible(false);
+    this.bird.body.setVelocity(0, 0);
+    this.bird.body.setAllowGravity(false);
     this.bird.anims.stop();
-    this.bird.body.setVelocityY(-200); // small upward bump
 
     if (this.pipeTimer) this.pipeTimer.remove();
 
@@ -151,49 +184,51 @@ export class PlayScene extends Phaser.Scene {
       if (trigger.body) trigger.body.setVelocityX(0);
     });
 
-    // Game Over text (after bird lands)
-    this.time.delayedCall(800, () => {
-      this.add.text(
-        CONFIG.gameWidth / 2,
-        CONFIG.gameHeight / 3,
-        'Game Over',
-        {
-          fontSize: '36px',
-          fontFamily: 'Arial, sans-serif',
-          fontStyle: 'bold',
-          color: '#ffffff',
-          stroke: '#333333',
-          strokeThickness: 5,
-        }
-      ).setOrigin(0.5).setDepth(20);
+    // Update high score
+    const prevBest = parseInt(localStorage.getItem('flappy-highscore') || '0', 10);
+    const isNewBest = this.score > prevBest;
+    const highScore = isNewBest ? this.score : prevBest;
+    if (isNewBest) localStorage.setItem('flappy-highscore', String(this.score));
 
-      this.add.text(
-        CONFIG.gameWidth / 2,
-        CONFIG.gameHeight / 3 + 50,
-        `Score: ${this.score}`,
-        {
-          fontSize: '24px',
-          fontFamily: 'Arial, sans-serif',
-          color: '#ffffff',
-          stroke: '#333333',
-          strokeThickness: 4,
-        }
-      ).setOrigin(0.5).setDepth(20);
+    // Game Over modal (after feathers settle)
+    this.time.delayedCall(800, () => {
+      const cx = CONFIG.gameWidth / 2;
+      const cy = CONFIG.gameHeight / 2 - 20;
+      const mw = 220;
+      const mh = 340;
+
+      // Modal background
+      this.add.rectangle(cx, cy + 30, mw, mh, 0x000000, 0.8)
+        .setOrigin(0.5).setDepth(25).setStrokeStyle(2, 0xffffff);
+
+      // "Game Over" title
+      this.add.text(cx, cy - 130, 'Game Over', {
+        fontSize: '28px', fontFamily: 'Arial, sans-serif', fontStyle: 'bold',
+        color: '#ffffff', stroke: '#333333', strokeThickness: 4,
+      }).setOrigin(0.5).setDepth(26);
+
+      // Score
+      this.add.text(cx, cy - 85, `Score: ${this.score}`, {
+        fontSize: '22px', fontFamily: 'Arial, sans-serif', fontStyle: 'bold',
+        color: '#ffffff', stroke: '#333333', strokeThickness: 3,
+      }).setOrigin(0.5).setDepth(26);
+
+      // High score
+      this.add.text(cx, cy - 50, `Best: ${highScore}`, {
+        fontSize: '22px', fontFamily: 'Arial, sans-serif', fontStyle: 'bold',
+        color: isNewBest ? '#f7dc6f' : '#aaaaaa', stroke: '#333333', strokeThickness: 3,
+      }).setOrigin(0.5).setDepth(26);
+
+      // New best indicator
+      if (isNewBest && this.score > 0) {
+        this.add.text(cx, cy - 20, 'NEW BEST!', {
+          fontSize: '16px', fontFamily: 'Arial, sans-serif', fontStyle: 'bold',
+          color: '#f7dc6f', stroke: '#333333', strokeThickness: 2,
+        }).setOrigin(0.5).setDepth(26);
+      }
 
       this.time.delayedCall(500, () => {
-        this.add.text(
-          CONFIG.gameWidth / 2,
-          CONFIG.gameHeight / 3 + 100,
-          'Tap to restart',
-          {
-            fontSize: '18px',
-            fontFamily: 'Arial, sans-serif',
-            color: '#ffffff',
-            stroke: '#333333',
-            strokeThickness: 3,
-          }
-        ).setOrigin(0.5).setDepth(20);
-        this.canRestart = true;
+        createMathQuiz(this, cx, cy, () => this.scene.restart());
       });
     });
   }
@@ -223,13 +258,15 @@ export class PlayScene extends Phaser.Scene {
     bottomCap.body.setVelocityX(-CONFIG.pipeSpeed);
     bottomCap.body.setImmovable(true);
 
-    // Bottom pipe body
+    // Bottom pipe body (visual to ground, hitbox to screen bottom)
     const bottomBodyY = gapCenterY + halfGap + CONFIG.pipeCapHeight;
-    const bottomBodyH = CONFIG.gameHeight - CONFIG.groundHeight - bottomBodyY;
+    const bottomVisualH = CONFIG.gameHeight - CONFIG.groundHeight - bottomBodyY;
+    const bottomHitboxH = CONFIG.gameHeight - bottomBodyY;
     const bottomBody = this.pipeBodyGroup.create(x, bottomBodyY, 'pipe-body');
     bottomBody.setOrigin(0.5, 0);
-    bottomBody.setDisplaySize(CONFIG.pipeBodyWidth, bottomBodyH);
-    bottomBody.body.setSize(CONFIG.pipeBodyWidth, bottomBodyH);
+    bottomBody.setDisplaySize(CONFIG.pipeBodyWidth, bottomVisualH);
+    bottomBody.body.setSize(CONFIG.pipeBodyWidth, bottomHitboxH, false);
+    bottomBody.body.setOffset(0, 0);
     bottomBody.body.setAllowGravity(false);
     bottomBody.body.setVelocityX(-CONFIG.pipeSpeed);
     bottomBody.body.setImmovable(true);
@@ -242,13 +279,14 @@ export class PlayScene extends Phaser.Scene {
     topCap.body.setVelocityX(-CONFIG.pipeSpeed);
     topCap.body.setImmovable(true);
 
-    // Top pipe body (flipped)
+    // Top pipe body (extends to top of screen)
     const topBodyBottom = gapCenterY - halfGap - CONFIG.pipeCapHeight;
     const topBodyH = topBodyBottom;
     const topBody = this.pipeBodyGroup.create(x, 0, 'pipe-body');
     topBody.setOrigin(0.5, 0);
     topBody.setDisplaySize(CONFIG.pipeBodyWidth, topBodyH);
-    topBody.body.setSize(CONFIG.pipeBodyWidth, topBodyH);
+    topBody.body.setSize(CONFIG.pipeBodyWidth, topBodyH, false);
+    topBody.body.setOffset(0, 0);
     topBody.body.setAllowGravity(false);
     topBody.body.setVelocityX(-CONFIG.pipeSpeed);
     topBody.body.setImmovable(true);
@@ -305,6 +343,7 @@ export class PlayScene extends Phaser.Scene {
           trigger.scored = true;
           this.score++;
           this.scoreText.setText(String(this.score));
+          playScore();
         }
       });
 
@@ -327,16 +366,6 @@ export class PlayScene extends Phaser.Scene {
       });
     }
 
-    // GAME_OVER: bird tumbles down
-    if (this.state === State.GAME_OVER) {
-      if (this.bird.y < CONFIG.gameHeight - CONFIG.groundHeight - CONFIG.birdHeight) {
-        this.bird.angle = Math.min(this.bird.angle + 8, 90);
-      } else {
-        // Bird hit ground — stop
-        this.bird.body.setVelocity(0, 0);
-        this.bird.body.setAllowGravity(false);
-        this.bird.angle = 90;
-      }
-    }
+    // GAME_OVER: bird is hidden (feather explosion handles visuals)
   }
 }
