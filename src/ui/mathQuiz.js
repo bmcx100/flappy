@@ -359,19 +359,16 @@ export function createMathQuiz(scene, cx, cy, onPass) {
       shakeModal();
 
       wrongCount++;
-      if (wrongCount > 2) {
-        questionsNeeded = 3;
-        if (circles.length < 3) {
-          // First time entering penalty — animate 1 → 3 circles
-          questionsCorrect = 0;
-          scene.time.delayedCall(400, () => {
-            if (alive) createCircles(3, true);
-          });
-        } else {
-          // Already in penalty — reset progress
-          questionsCorrect = 0;
-          resetCircles();
-        }
+      const newNeeded = Math.min(wrongCount + 1, 3);
+      if (newNeeded > questionsNeeded) {
+        questionsNeeded = newNeeded;
+        questionsCorrect = 0;
+        scene.time.delayedCall(400, () => {
+          if (alive) createCircles(questionsNeeded, true);
+        });
+      } else if (questionsNeeded === 3) {
+        questionsCorrect = 0;
+        resetCircles();
       }
 
       scene.time.delayedCall(800, () => {
