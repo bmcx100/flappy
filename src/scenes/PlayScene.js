@@ -34,6 +34,13 @@ export class PlayScene extends Phaser.Scene {
     this.bird.body.setSize(CONFIG.birdWidth - 6, CONFIG.birdHeight - 6); // forgiving hitbox
     this.bird.setDepth(10);
 
+    // Pipe groups (object pooling)
+    this.pipeBodyGroup = this.physics.add.group();
+    this.pipeCapGroup = this.physics.add.group();
+    this.scoreTriggers = this.physics.add.group();
+
+    this.pipeTimer = null;
+
     // "Get Ready" text
     this.readyText = this.add.text(
       CONFIG.gameWidth / 2,
@@ -106,6 +113,7 @@ export class PlayScene extends Phaser.Scene {
     this.scoreText.setVisible(true);
     this.bird.body.setAllowGravity(true);
     this.flap();
+    this.startPipeTimer();
   }
 
   flap() {
@@ -115,6 +123,70 @@ export class PlayScene extends Phaser.Scene {
   restartGame() {
     if (!this.canRestart) return;
     this.scene.restart();
+  }
+
+  startPipeTimer() {
+    this.pipeTimer = this.time.addEvent({
+      delay: CONFIG.pipeInterval,
+      callback: this.spawnPipePair,
+      callbackScope: this,
+      loop: true,
+    });
+    // Spawn first pair immediately
+    this.spawnPipePair();
+  }
+
+  spawnPipePair() {
+    const minGapY = 80 + CONFIG.pipeGap / 2;
+    const maxGapY = CONFIG.gameHeight - CONFIG.groundHeight - 80 - CONFIG.pipeGap / 2;
+    const gapCenterY = Phaser.Math.Between(minGapY, maxGapY);
+    const halfGap = CONFIG.pipeGap / 2;
+    const x = CONFIG.gameWidth + CONFIG.pipeCapWidth / 2;
+
+    // Bottom pipe cap
+    const bottomCap = this.pipeCapGroup.create(x, gapCenterY + halfGap, 'pipe-cap');
+    bottomCap.setOrigin(0.5, 0);
+    bottomCap.body.setAllowGravity(false);
+    bottomCap.body.setVelocityX(-CONFIG.pipeSpeed);
+    bottomCap.body.setImmovable(true);
+
+    // Bottom pipe body
+    const bottomBodyY = gapCenterY + halfGap + CONFIG.pipeCapHeight;
+    const bottomBodyH = CONFIG.gameHeight - CONFIG.groundHeight - bottomBodyY;
+    const bottomBody = this.pipeBodyGroup.create(x, bottomBodyY, 'pipe-body');
+    bottomBody.setOrigin(0.5, 0);
+    bottomBody.setDisplaySize(CONFIG.pipeBodyWidth, bottomBodyH);
+    bottomBody.body.setSize(CONFIG.pipeBodyWidth, bottomBodyH);
+    bottomBody.body.setAllowGravity(false);
+    bottomBody.body.setVelocityX(-CONFIG.pipeSpeed);
+    bottomBody.body.setImmovable(true);
+
+    // Top pipe cap (flipped)
+    const topCap = this.pipeCapGroup.create(x, gapCenterY - halfGap, 'pipe-cap');
+    topCap.setOrigin(0.5, 1);
+    topCap.setFlipY(true);
+    topCap.body.setAllowGravity(false);
+    topCap.body.setVelocityX(-CONFIG.pipeSpeed);
+    topCap.body.setImmovable(true);
+
+    // Top pipe body (flipped)
+    const topBodyBottom = gapCenterY - halfGap - CONFIG.pipeCapHeight;
+    const topBodyH = topBodyBottom;
+    const topBody = this.pipeBodyGroup.create(x, 0, 'pipe-body');
+    topBody.setOrigin(0.5, 0);
+    topBody.setDisplaySize(CONFIG.pipeBodyWidth, topBodyH);
+    topBody.body.setSize(CONFIG.pipeBodyWidth, topBodyH);
+    topBody.body.setAllowGravity(false);
+    topBody.body.setVelocityX(-CONFIG.pipeSpeed);
+    topBody.body.setImmovable(true);
+
+    // Score trigger (invisible, positioned at pipe center)
+    const trigger = this.scoreTriggers.create(x, gapCenterY, null);
+    trigger.setVisible(false);
+    trigger.body.setSize(4, CONFIG.pipeGap);
+    trigger.body.setAllowGravity(false);
+    trigger.body.setVelocityX(-CONFIG.pipeSpeed);
+    trigger.scored = false;
   }
 
   update(time, delta) {
@@ -153,6 +225,24 @@ export class PlayScene extends Phaser.Scene {
         this.bird.y = 0;
         this.bird.body.setVelocityY(0);
       }
+
+      // Remove off-screen pipes
+      const destroyX = -CONFIG.pipeCapWidth;
+      this.pipeBodyGroup.children.each((pipe) => {
+        if (pipe.active && pipe.x < destroyX) {
+          pipe.destroy();
+        }
+      });
+      this.pipeCapGroup.children.each((cap) => {
+        if (cap.active && cap.x < destroyX) {
+          cap.destroy();
+        }
+      });
+      this.scoreTriggers.children.each((trigger) => {
+        if (trigger.active && trigger.x < destroyX) {
+          trigger.destroy();
+        }
+      });
     }
   }
 }
