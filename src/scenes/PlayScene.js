@@ -41,6 +41,11 @@ export class PlayScene extends Phaser.Scene {
 
     this.pipeTimer = null;
 
+    // Collisions
+    this.physics.add.collider(this.bird, this.groundBody, () => this.die());
+    this.physics.add.overlap(this.bird, this.pipeBodyGroup, () => this.die());
+    this.physics.add.overlap(this.bird, this.pipeCapGroup, () => this.die());
+
     // "Get Ready" text
     this.readyText = this.add.text(
       CONFIG.gameWidth / 2,
@@ -123,6 +128,74 @@ export class PlayScene extends Phaser.Scene {
   restartGame() {
     if (!this.canRestart) return;
     this.scene.restart();
+  }
+
+  die() {
+    if (this.state === State.GAME_OVER) return;
+    this.state = State.GAME_OVER;
+
+    // Bird tumbles
+    this.bird.anims.stop();
+    this.bird.body.setVelocityY(-200); // small upward bump
+
+    if (this.pipeTimer) this.pipeTimer.remove();
+
+    // Stop pipes
+    this.pipeBodyGroup.children.each((pipe) => {
+      if (pipe.body) pipe.body.setVelocityX(0);
+    });
+    this.pipeCapGroup.children.each((cap) => {
+      if (cap.body) cap.body.setVelocityX(0);
+    });
+    this.scoreTriggers.children.each((trigger) => {
+      if (trigger.body) trigger.body.setVelocityX(0);
+    });
+
+    // Game Over text (after bird lands)
+    this.time.delayedCall(800, () => {
+      this.add.text(
+        CONFIG.gameWidth / 2,
+        CONFIG.gameHeight / 3,
+        'Game Over',
+        {
+          fontSize: '36px',
+          fontFamily: 'Arial, sans-serif',
+          fontStyle: 'bold',
+          color: '#ffffff',
+          stroke: '#333333',
+          strokeThickness: 5,
+        }
+      ).setOrigin(0.5).setDepth(20);
+
+      this.add.text(
+        CONFIG.gameWidth / 2,
+        CONFIG.gameHeight / 3 + 50,
+        `Score: ${this.score}`,
+        {
+          fontSize: '24px',
+          fontFamily: 'Arial, sans-serif',
+          color: '#ffffff',
+          stroke: '#333333',
+          strokeThickness: 4,
+        }
+      ).setOrigin(0.5).setDepth(20);
+
+      this.time.delayedCall(500, () => {
+        this.add.text(
+          CONFIG.gameWidth / 2,
+          CONFIG.gameHeight / 3 + 100,
+          'Tap to restart',
+          {
+            fontSize: '18px',
+            fontFamily: 'Arial, sans-serif',
+            color: '#ffffff',
+            stroke: '#333333',
+            strokeThickness: 3,
+          }
+        ).setOrigin(0.5).setDepth(20);
+        this.canRestart = true;
+      });
+    });
   }
 
   startPipeTimer() {
@@ -226,6 +299,15 @@ export class PlayScene extends Phaser.Scene {
         this.bird.body.setVelocityY(0);
       }
 
+      // Score — check if bird passed a trigger
+      this.scoreTriggers.children.each((trigger) => {
+        if (trigger.active && !trigger.scored && trigger.x < this.bird.x) {
+          trigger.scored = true;
+          this.score++;
+          this.scoreText.setText(String(this.score));
+        }
+      });
+
       // Remove off-screen pipes
       const destroyX = -CONFIG.pipeCapWidth;
       this.pipeBodyGroup.children.each((pipe) => {
@@ -243,6 +325,18 @@ export class PlayScene extends Phaser.Scene {
           trigger.destroy();
         }
       });
+    }
+
+    // GAME_OVER: bird tumbles down
+    if (this.state === State.GAME_OVER) {
+      if (this.bird.y < CONFIG.gameHeight - CONFIG.groundHeight - CONFIG.birdHeight) {
+        this.bird.angle = Math.min(this.bird.angle + 8, 90);
+      } else {
+        // Bird hit ground — stop
+        this.bird.body.setVelocity(0, 0);
+        this.bird.body.setAllowGravity(false);
+        this.bird.angle = 90;
+      }
     }
   }
 }
