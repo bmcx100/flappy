@@ -1,0 +1,16 @@
+export const CONFIG = {
+  gameWidth: 360,
+  gameHeight: 640,
+  gravity: 1200,
+  flapVelocity: -400,
+  pipeSpeed: 200,
+  pipeGap: 130,
+  pipeInterval: 1500,
+  birdX: 90,
+  groundHeight: 78,
+  pipeCapWidth: 48,
+  pipeCapHeight: 18,
+  pipeBodyWidth: 40,
+  birdWidth: 34,
+  birdHeight: 24,
+};
