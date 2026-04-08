@@ -10,20 +10,22 @@ export class BootScene extends Phaser.Scene {
   }
 
   create() {
-    createBackgroundTexture(this);
-    createGroundTexture(this);
-    createPipeTextures(this);
-    createBirdTexture(this);
-    createFeatherTextures(this);
-    createGearTexture(this);
+    // Only create textures on first boot (they persist across scene changes)
+    if (!this.textures.exists('background')) {
+      createBackgroundTexture(this);
+      createGroundTexture(this);
+      createPipeTextures(this);
+      createBirdTexture(this);
+      createFeatherTextures(this);
+      createGearTexture(this);
 
-    // Bird flap animation
-    this.anims.create({
-      key: 'flap',
-      frames: this.anims.generateFrameNumbers('bird', { start: 0, end: 2 }),
-      frameRate: 10,
-      repeat: -1,
-    });
+      this.anims.create({
+        key: 'flap',
+        frames: this.anims.generateFrameNumbers('bird', { start: 0, end: 2 }),
+        frameRate: 10,
+        repeat: -1,
+      });
+    }
 
     this.scene.start('FlappyPlay');
   }
