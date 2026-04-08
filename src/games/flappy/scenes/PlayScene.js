@@ -2,6 +2,7 @@ import { CONFIG } from '../config.js';
 import { initAudio, playFlap, playScore, playHit, playDeathSplat, startMusic, stopMusic } from '../assets/audio.js';
 import { createSettingsUI } from '../ui/settingsButton.js';
 import { createMathQuiz } from '../ui/mathQuiz.js';
+import { createBackButton } from '../../../ui/backButton.js';
 
 const State = { READY: 0, PLAYING: 1, GAME_OVER: 2 };
 
@@ -103,6 +104,9 @@ export class PlayScene extends Phaser.Scene {
 
     // Settings UI (must be created before scene-level input so it can stopPropagation)
     this.settingsUI = createSettingsUI(this, () => this.state === State.PLAYING);
+
+    // Back to menu button
+    this.backBtn = createBackButton(this, () => stopMusic());
 
     // Input — skip if settings UI consumed this event
     this.input.on('pointerdown', () => {
