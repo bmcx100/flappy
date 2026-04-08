@@ -6,7 +6,7 @@ import { createGearTexture } from '../assets/audio.js';
 
 export class BootScene extends Phaser.Scene {
   constructor() {
-    super('BootScene');
+    super('FlappyBoot');
   }
 
   create() {
@@ -25,6 +25,6 @@ export class BootScene extends Phaser.Scene {
       repeat: -1,
     });
 
-    this.scene.start('PlayScene');
+    this.scene.start('FlappyPlay');
   }
 }

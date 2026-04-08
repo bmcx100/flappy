@@ -7,7 +7,7 @@ const State = { READY: 0, PLAYING: 1, GAME_OVER: 2 };
 
 export class PlayScene extends Phaser.Scene {
   constructor() {
-    super('PlayScene');
+    super('FlappyPlay');
   }
 
   create() {
