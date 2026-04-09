@@ -105,7 +105,7 @@ export class PlayScene extends Phaser.Scene {
     // Settings UI (must be created before scene-level input so it can stopPropagation)
     this.settingsUI = createSettingsUI(this, () => this.state === State.PLAYING);
 
-    // Back to menu button
+    // Back to menu button (bottom-left)
     this.backBtn = createBackButton(this, () => stopMusic());
 
     // Input — skip if settings UI consumed this event

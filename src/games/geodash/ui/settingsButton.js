@@ -28,7 +28,7 @@ export function createSettingsUI(scene, isPlaying) {
   const gearY = scene.sys.game.config.height - 20;
 
   // Gear button (bottom-right)
-  const gearBtn = scene.add.image(gearX, gearY, 'gear-icon')
+  const gearBtn = scene.add.image(gearX, gearY, 'gd-gear-icon')
     .setDepth(DEPTH)
     .setInteractive({ useHandCursor: true })
     .setScrollFactor(0);
